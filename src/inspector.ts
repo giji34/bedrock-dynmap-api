@@ -1,16 +1,16 @@
 import { Cli } from "./cli";
 import { Dimension, Player, PlayerLocation, Point, Rect } from "./types";
 
-export type MonitorOptions = {
+export type InspectorOptions = {
   inspectors: Map<Dimension, string>;
 };
 
-export class Monitor {
+export class Inspector {
   private _players: Player[] = [];
 
   constructor(
     private readonly cli: Cli,
-    private readonly options: MonitorOptions
+    private readonly options: InspectorOptions
   ) {}
 
   start() {

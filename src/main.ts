@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import * as express from "express";
 import { Cli } from "./cli";
-import { Monitor, MonitorOptions } from "./monitor";
+import { Inspector, InspectorOptions } from "./inspector";
 import { Dimension } from "./types";
 import caporal = require("caporal");
 
@@ -47,11 +47,11 @@ caporal
     if (theEnd) {
       inspectors.set("the_end", theEnd);
     }
-    const monitorOptions: MonitorOptions = { inspectors };
+    const inspectorOptions: InspectorOptions = { inspectors };
 
     const cli = new Cli(executable);
     await cli.start();
-    const monitor = new Monitor(cli, monitorOptions);
+    const monitor = new Inspector(cli, inspectorOptions);
     monitor.start();
 
     const app = express();
