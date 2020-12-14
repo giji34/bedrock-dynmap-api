@@ -125,7 +125,7 @@ export class Inspector {
         height: size,
       };
 
-      if ((await isIn(rect)) === true) {
+      if (await isIn(rect)) {
         const nextSize = Math.ceil(size * 0.5);
         const delta: Point[] = [
           { x: -1, z: -1 }, // north west
@@ -134,20 +134,20 @@ export class Inspector {
           { x: -1, z: 1 }, // south west
         ];
         for (const d of delta) {
-          const nextPivot: Point = {
-            x: Math.floor(pivot.x + size * 0.25 * d.x),
-            z: Math.floor(pivot.z + size * 0.25 * d.z),
+          const nextPivot = roundPoint({
+            x: pivot.x + size * 0.25 * d.x,
+            z: pivot.z + size * 0.25 * d.z,
+          });
+          const r0: Rect = {
+            x: nextPivot.x - nextSize * 0.5,
+            z: nextPivot.z - nextSize * 0.5,
+            width: nextSize,
+            height: nextSize,
           };
-          const r: Rect = {
-            x: Math.floor(nextPivot.x - nextSize * 0.5),
-            z: Math.floor(nextPivot.z - nextSize * 0.5),
-            width: Math.ceil(nextSize),
-            height: Math.ceil(nextSize),
-          };
-          const found = await isIn(r);
-          if (found === true) {
+          const r = ceilRect(r0);
+          if (await isIn(r)) {
             pivot = nextPivot;
-            size = Math.ceil(size * 0.5);
+            size = nextSize;
             ok = true;
             break;
           }
@@ -166,4 +166,16 @@ export class Inspector {
       return undefined;
     }
   }
+}
+
+function ceilRect(rect: Rect): Rect {
+  const x0 = Math.floor(rect.x);
+  const z0 = Math.floor(rect.z);
+  const x1 = Math.ceil(rect.x + rect.width);
+  const z1 = Math.ceil(rect.z + rect.height);
+  return { x: x0, z: z0, width: x1 - x0, height: z1 - z0 };
+}
+
+function roundPoint(p: Point): Point {
+  return { x: Math.round(p.x), z: Math.round(p.z) };
 }
