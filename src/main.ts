@@ -55,9 +55,9 @@ caporal
     monitor.start();
 
     const app = express();
-    app.get("/current", (req: Request, res: Response) => {
+    app.get("/players", (req: Request, res: Response) => {
       try {
-        const players = monitor.current;
+        const players = monitor.players;
         res.status(200);
         res.json({ status: "ok", players });
       } catch (e) {

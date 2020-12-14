@@ -6,7 +6,7 @@ export type MonitorOptions = {
 };
 
 export class Monitor {
-  private players: Player[] = [];
+  private _players: Player[] = [];
 
   constructor(
     private readonly cli: Cli,
@@ -17,8 +17,8 @@ export class Monitor {
     this.update();
   }
 
-  get current(): Player[] {
-    return JSON.parse(JSON.stringify(this.players)) as Player[];
+  get players(): Player[] {
+    return JSON.parse(JSON.stringify(this._players)) as Player[];
   }
 
   private readonly update = () => {
@@ -63,7 +63,7 @@ export class Monitor {
         result.push({ name: player, location });
       }
     }
-    this.players = result;
+    this._players = result;
   }
 
   private async inspectPlayerDimension(name): Promise<Dimension | undefined> {
