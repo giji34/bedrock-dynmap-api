@@ -10,21 +10,21 @@ caporal
   .option("--executable <path>", "", caporal.STRING, undefined, true)
   .option("--port <port>", "", caporal.INTEGER, 3000, false)
   .option(
-    "--inspector-entity-name-overworld <player>",
+    "--inspector-entity-name-overworld <name>",
     "",
     caporal.STRING,
     undefined,
     false
   )
   .option(
-    "--inspector-entity-name-nether <player>",
+    "--inspector-entity-name-nether <name>",
     "",
     caporal.STRING,
     undefined,
     false
   )
   .option(
-    "--inspector-entity-name-the-end <player>",
+    "--inspector-entity-name-the-end <name>",
     "",
     caporal.STRING,
     undefined,
