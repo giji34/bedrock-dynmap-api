@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "fmt": "prettier --write 'src/**/*.ts'",
-    "dev": "ts-node src/server.ts run"
+    "dev": "ts-node src/main.ts run"
   },
   "author": "",
   "license": "MIT",
