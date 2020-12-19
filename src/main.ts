@@ -30,6 +30,7 @@ caporal
     undefined,
     false
   )
+  .option("--ignore <player-list>", "", caporal.LIST, [], false)
   .action(async (args, options) => {
     const port = options["port"];
     const executable = options["executable"];
@@ -47,7 +48,8 @@ caporal
     if (theEnd) {
       inspectors.set("the_end", theEnd);
     }
-    const inspectorOptions: InspectorOptions = { inspectors };
+    const ignore = options["ignore"];
+    const inspectorOptions: InspectorOptions = { inspectors, ignore };
 
     const cli = new Cli(executable);
     await cli.start();

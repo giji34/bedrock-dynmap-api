@@ -3,6 +3,7 @@ import { Dimension, Player, PlayerLocation, Point, Rect } from "./types";
 
 export type InspectorOptions = {
   inspectors: Map<Dimension, string>;
+  ignore: string[];
 };
 
 export class Inspector {
@@ -37,21 +38,22 @@ export class Inspector {
       .split("\n")
       .splice(1)
       .filter((p) => p.length > 0);
-    let players: string[] = [];
+    const players = new Set<string>();
     for (const line of lines) {
       const values = line
         .trim()
         .split(",")
         .map((v) => v.trim())
         .filter((v) => v.length > 0);
-      players.push(...values);
+      values.forEach((p) => players.add(p));
     }
     if (!includeInspectorPlayer) {
-      for (const inspector in this.options.inspectors.values()) {
-        players = players.filter((p) => p !== inspector);
+      for (const inspector of this.options.inspectors.values()) {
+        players.delete(inspector);
       }
     }
-    return players;
+    this.options.ignore.forEach((p) => players.delete(p));
+    return [...players.values()];
   }
 
   private async searchOnlinePlayers(): Promise<void> {
