@@ -2,8 +2,10 @@ import type { Request, Response } from "express";
 import * as express from "express";
 import { Cli } from "./cli";
 import { Inspector, InspectorOptions } from "./inspector";
-import { Dimension } from "./types";
+import { CommandSetting, Dimension } from "./types";
 import caporal = require("caporal");
+import * as fs from "fs";
+import { CommandExecutor } from "./command-executor";
 
 caporal
   .command("run", "")
@@ -31,6 +33,13 @@ caporal
     false
   )
   .option("--ignore <player-list>", "", caporal.LIST, [], false)
+  .option(
+    "--command-setting <command-setting>",
+    "",
+    caporal.STRING,
+    undefined,
+    false
+  )
   .action(async (args, options) => {
     const port = options["port"];
     const executable = options["executable"];
@@ -51,10 +60,20 @@ caporal
     const ignore = options["ignore"];
     const inspectorOptions: InspectorOptions = { inspectors, ignore };
 
+    let commands: CommandSetting = { commands: [] };
+    const commandSetting = options["commandSetting"];
+    if (commandSetting) {
+      commands = JSON.parse(
+        fs.readFileSync(commandSetting, { encoding: "utf-8" })
+      ) as CommandSetting;
+    }
+
     const cli = new Cli(executable);
     await cli.start();
     const monitor = new Inspector(cli, inspectorOptions);
     monitor.start();
+    const executor = new CommandExecutor(cli, inspectorOptions, commands);
+    executor.start();
 
     const app = express();
     app.get("/players", (req: Request, res: Response) => {

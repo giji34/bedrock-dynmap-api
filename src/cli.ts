@@ -35,9 +35,38 @@ export class Cli {
         if (initLog.endsWith("[INFO] Server started.\n")) {
           this.p.stdout!.removeListener("data", onInitLog);
           resolve();
+          this.runLoop();
         }
       };
       this.p.stdout!.addListener("data", onInitLog);
+    });
+  }
+
+  private readonly runLoop = () => {
+    this.unsafeRunLoop()
+      .catch(console.error)
+      .finally(() => {
+        setTimeout(this.runLoop, 10);
+      });
+  };
+
+  private async unsafeRunLoop(): Promise<void> {
+    if (this.queue.length === 0) {
+      return;
+    }
+    const [q] = this.queue.splice(0, 1);
+    return new Promise((resolve, reject) => {
+      let result = "";
+      const onData = (data) => {
+        result += data.toString("utf-8");
+        q.then(result);
+        resolve();
+        this.p.stdout!.removeListener("data", onData);
+        this.p.stdout!.addListener("data", this.defaultStdout);
+      };
+      this.p.stdout!.removeListener("data", this.defaultStdout);
+      this.p.stdout!.addListener("data", onData);
+      this.p.stdin!.write(q.command + "\n");
     });
   }
 
@@ -54,18 +83,21 @@ export class Cli {
     console.log(str);
   };
 
+  private queue: Queue[] = [];
+
   async exec(command: string): Promise<string> {
     return new Promise((resolve, reject) => {
-      let result = "";
-      const onData = (data) => {
-        result += data.toString("utf-8");
-        resolve(result);
-        this.p.stdout!.removeListener("data", onData);
-        this.p.stdout!.addListener("data", this.defaultStdout);
-      };
-      this.p.stdout!.removeListener("data", this.defaultStdout);
-      this.p.stdout!.addListener("data", onData);
-      this.p.stdin!.write(command + "\n");
+      this.queue.push({
+        command,
+        then: (result: string) => {
+          resolve(result);
+        },
+      });
     });
   }
 }
+
+type Queue = {
+  command: string;
+  then: (result: string) => void;
+};
