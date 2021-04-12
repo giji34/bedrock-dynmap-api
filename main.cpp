@@ -304,6 +304,7 @@ static void HookDebug(pid_t pid, struct user_regs_struct regs) {
 int main(int argc, char *argv[]) {
   pid_t pid = atoi(argv[1]);
 
+  // 1.16.220.02
   Hook hooks[] = {
       {.fAddress = 0x0000000001f9fbd0, .fCallback = HookActorSetPos},
       {.fAddress = 0x0000000001b172b0, .fCallback = HookPlayerMove},
@@ -322,16 +323,15 @@ int main(int argc, char *argv[]) {
   int s;
   waitpid(pid, &s, 0);
 
-  long const kInt3Opcode = 0x000000CC;
+  long const kInt3Opcode = 0x000000cc;
   for (size_t i = 0; i < kNumHooks; i++) {
     unsigned long address = hooks[i].fAddress;
-    long original = ptrace(PTRACE_PEEKTEXT, pid, address, nullptr);
-    ;
+    long original = ptrace(PTRACE_PEEKTEXT, pid, address, 0);
     hooks[i].fOriginalInstruction = original;
     ptrace(PTRACE_POKETEXT, pid, address, ((original & 0xFFFFFFFFFFFFFF00) | kInt3Opcode));
   }
 
-  ptrace(PTRACE_CONT, pid, NULL, NULL);
+  ptrace(PTRACE_CONT, pid, 0, 0);
 
   int status;
   while (true) {
