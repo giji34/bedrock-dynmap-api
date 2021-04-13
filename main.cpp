@@ -161,14 +161,6 @@ private:
 
 PlayerRegistry sPlayers;
 
-using HookCallback = std::function<void(pid_t, struct user_regs_struct)>;
-
-struct Hook {
-  unsigned long fAddress;
-  HookCallback fCallback;
-  long fOriginalInstruction;
-};
-
 void AttachAllThread(int pid) {
   char _taskdir[255];
 
@@ -230,8 +222,20 @@ static std::optional<std::string> ReadString(pid_t pid, void *address) {
   return std::string(data.data());
 }
 
+using BreakpointCallback = std::function<void(pid_t, struct user_regs_struct)>;
+
+struct Breakpoint {
+  unsigned long fAddress;
+  BreakpointCallback fCallback;
+  long fOriginalInstruction;
+};
+
+namespace breakpoint {
+
+namespace actor {
+
 // Actor::setPos(Vec3 const&)
-static void HookActorSetPos(pid_t pid, struct user_regs_struct regs) {
+static void SetPos(pid_t pid, struct user_regs_struct regs) {
   auto player = sPlayers.unsafeGetByAddress((void *)regs.rdi);
   if (!player) {
     return;
@@ -243,8 +247,12 @@ static void HookActorSetPos(pid_t pid, struct user_regs_struct regs) {
   player->setPos(*pos);
 }
 
+} // namespace actor
+
+namespace player {
+
 // Player::move(Vec3 const&)
-static void HookPlayerMove(pid_t pid, struct user_regs_struct regs) {
+static void Move(pid_t pid, struct user_regs_struct regs) {
   auto address = (void *)regs.rdi;
   auto player = sPlayers.unsafeGetByAddress(address);
   if (!player) {
@@ -258,7 +266,7 @@ static void HookPlayerMove(pid_t pid, struct user_regs_struct regs) {
 }
 
 // Player::setName(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)
-static void HookPlayerSetName(pid_t pid, struct user_regs_struct regs) {
+static void SetName(pid_t pid, struct user_regs_struct regs) {
   auto address = (void *)regs.rdi;
   auto name = ReadString(pid, (void *)regs.rsi);
   if (!name) {
@@ -267,9 +275,13 @@ static void HookPlayerSetName(pid_t pid, struct user_regs_struct regs) {
   sPlayers.getByName(*name, address);
 }
 
+} // namespace player
+
+namespace server_player {
+
 // ServerPlayer::changeDimension(AutomaticID<Dimension, int>, bool)
 // ServerPlayer::changeDimensionWithCredits(AutomaticID<Dimension, int>)
-static void HookServerPlayerChangeDimension(pid_t pid, struct user_regs_struct regs) {
+static void ChangeDimension(pid_t pid, struct user_regs_struct regs) {
   auto player = sPlayers.unsafeGetByAddress((void *)regs.rdi);
   if (!player) {
     return;
@@ -279,7 +291,7 @@ static void HookServerPlayerChangeDimension(pid_t pid, struct user_regs_struct r
 }
 
 // ServerPlayer::is2DPositionRelevant(AutomaticID<Dimension, int>, BlockPos const&)
-static void HookServerPlayerIs2DPositionRelevant(pid_t pid, struct user_regs_struct regs) {
+static void Is2DPositionRelevant(pid_t pid, struct user_regs_struct regs) {
   auto player = sPlayers.unsafeGetByAddress((void *)regs.rdi);
   if (!player) {
     return;
@@ -289,7 +301,7 @@ static void HookServerPlayerIs2DPositionRelevant(pid_t pid, struct user_regs_str
 }
 
 // ServerPlayer::~ServerPlayer()
-static void HookServerPlayerDestructor(pid_t pid, struct user_regs_struct regs) {
+static void Destruct(pid_t pid, struct user_regs_struct regs) {
   auto player = sPlayers.unsafeGetByAddress((void *)regs.rdi);
   if (!player) {
     return;
@@ -297,25 +309,29 @@ static void HookServerPlayerDestructor(pid_t pid, struct user_regs_struct regs) 
   sPlayers.forget(player);
 }
 
-static void HookDebug(pid_t pid, struct user_regs_struct regs) {
+} // namespace server_player
+
+static void Debug(pid_t pid, struct user_regs_struct regs) {
   printf("%s\n", __FUNCTION__);
 }
+
+} // namespace breakpoint
 
 int main(int argc, char *argv[]) {
   pid_t pid = atoi(argv[1]);
 
   // 1.16.220.02
-  Hook hooks[] = {
-      {.fAddress = 0x0000000001f9fbd0, .fCallback = HookActorSetPos},
-      {.fAddress = 0x0000000001b172b0, .fCallback = HookPlayerMove},
-      {.fAddress = 0x0000000001b14270, .fCallback = HookPlayerSetName},
-      {.fAddress = 0x00000000016ac180, .fCallback = HookServerPlayerChangeDimension},
-      {.fAddress = 0x00000000016ac290, .fCallback = HookServerPlayerChangeDimension},
-      {.fAddress = 0x00000000016ac970, .fCallback = HookServerPlayerIs2DPositionRelevant},
-      {.fAddress = 0x00000000016a46c0, .fCallback = HookServerPlayerDestructor},
-      {.fAddress = 0x00000000016a4530, .fCallback = HookServerPlayerDestructor},
+  Breakpoint breakpoints[] = {
+      {.fAddress = 0x0000000001f9fbd0, .fCallback = breakpoint::actor::SetPos},
+      {.fAddress = 0x0000000001b172b0, .fCallback = breakpoint::player::Move},
+      {.fAddress = 0x0000000001b14270, .fCallback = breakpoint::player::SetName},
+      {.fAddress = 0x00000000016ac180, .fCallback = breakpoint::server_player::ChangeDimension},
+      {.fAddress = 0x00000000016ac290, .fCallback = breakpoint::server_player::ChangeDimension},
+      {.fAddress = 0x00000000016ac970, .fCallback = breakpoint::server_player::Is2DPositionRelevant},
+      {.fAddress = 0x00000000016a46c0, .fCallback = breakpoint::server_player::Destruct},
+      {.fAddress = 0x00000000016a4530, .fCallback = breakpoint::server_player::Destruct},
   };
-  size_t const kNumHooks = sizeof(hooks) / sizeof(Hook);
+  size_t const kNumBreakpoints = sizeof(breakpoints) / sizeof(Breakpoint);
 
   AttachAllThread(pid);
 
@@ -324,10 +340,10 @@ int main(int argc, char *argv[]) {
   waitpid(pid, &s, 0);
 
   long const kInt3Opcode = 0x000000cc;
-  for (size_t i = 0; i < kNumHooks; i++) {
-    unsigned long address = hooks[i].fAddress;
+  for (size_t i = 0; i < kNumBreakpoints; i++) {
+    unsigned long address = breakpoints[i].fAddress;
     long original = ptrace(PTRACE_PEEKTEXT, pid, address, 0);
-    hooks[i].fOriginalInstruction = original;
+    breakpoints[i].fOriginalInstruction = original;
     ptrace(PTRACE_POKETEXT, pid, address, ((original & 0xFFFFFFFFFFFFFF00) | kInt3Opcode));
   }
 
@@ -350,10 +366,10 @@ int main(int argc, char *argv[]) {
       struct user_regs_struct regs;
       ptrace(PTRACE_GETREGS, tid, 0, &regs);
 
-      Hook target;
-      for (size_t i = 0; i < kNumHooks; i++) {
-        if (hooks[i].fAddress + 1 == regs.rip) {
-          target = hooks[i];
+      Breakpoint target;
+      for (size_t i = 0; i < kNumBreakpoints; i++) {
+        if (breakpoints[i].fAddress + 1 == regs.rip) {
+          target = breakpoints[i];
           break;
         }
       }
