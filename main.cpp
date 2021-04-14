@@ -2,6 +2,7 @@
 #include <dirent.h>
 #include <stdio.h>
 #include <sys/ptrace.h>
+#include <sys/time.h>
 #include <sys/uio.h>
 #include <sys/user.h>
 #include <sys/wait.h>
@@ -12,6 +13,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <sstream>
 
 struct Vec3 {
   float x;
@@ -28,11 +30,11 @@ enum class Dimension : int {
 static std::string StringFromDimension(Dimension d) {
   switch (d) {
   case Dimension::NORMAL:
-    return "normal";
+    return "world";
   case Dimension::NETHER:
-    return "nether";
+    return "world_nether";
   case Dimension::THE_END:
-    return "the_end";
+    return "world_the_end";
   default:
     return "";
   }
@@ -155,11 +157,86 @@ public:
     fPlayers.erase(player->fAddress);
   }
 
+  void report(std::ostream &s) const {
+    s << "currentcount:" << fPlayers.size() << ",";
+    s << "players:[";
+    std::vector<std::shared_ptr<Player>> players;
+    for (auto const &it : fPlayers) {
+      if (it.second->location()) {
+        players.push_back(it.second);
+      }
+    }
+    for (int i = 0; i < players.size(); i++) {
+      auto const &player = players[i];
+      auto location = player->location();
+      s << "{";
+      auto name = player->fName; //TODO: escape?
+      s << "account:\"" << name << "\",";
+      s << "name:\"" << name << "\",";
+      s << "armor:0,";
+      s << "health:20,";
+      s << "sort:" << i << ",";
+      s << "type:\"player\",";
+      s << "world:\"" << StringFromDimension(location->fDimension) << "\",";
+      s << "x:" << (int)location->fPos.x << ",";
+      s << "y:" << (int)location->fPos.y << ",";
+      s << "z:" << (int)location->fPos.z;
+      s << "}";
+      if (i < players.size() - 1) {
+        s << ",";
+      }
+    }
+    s << "],";
+  }
+
 private:
   std::map<void *, std::shared_ptr<Player>> fPlayers;
 };
 
-PlayerRegistry sPlayers;
+struct Weather {
+  Weather() : fRain(false), fThunder(false) {}
+
+  bool fRain;
+  bool fThunder;
+
+  void report(std::ostream &s) const {
+    s << "hasStorm:" << (fRain ? "true" : "false") << ",";
+    s << "isThundering:" << (fThunder ? "true" : "false") << ",";
+  }
+};
+
+static time_t UnixTimestampMilli() {
+  struct timeval now {};
+  gettimeofday(&now, nullptr);
+  return (now.tv_sec * 1000) + (now.tv_usec / 1000);
+}
+
+struct Level {
+  PlayerRegistry fPlayers;
+  Weather fWeather;
+  int fTime;
+
+  std::string report() const {
+    std::ostringstream s;
+    fPlayers.report(s);
+    fWeather.report(s);
+    s << "configHash:0,";
+    s << "servertime:" << (fTime % 24000) << ",";
+    s << "updates:[]";
+    return s.str();
+  }
+
+  static std::string FormatReport(std::string const &partial) {
+    std::ostringstream s;
+    s << "{";
+    s << partial << ",";
+    s << "timestamp:" << UnixTimestampMilli();
+    s << "}";
+    return s.str();
+  }
+};
+
+Level sLevel;
 
 void AttachAllThread(int pid) {
   char _taskdir[255];
@@ -222,6 +299,10 @@ static std::optional<std::string> ReadString(pid_t pid, void *address) {
   return std::string(data.data());
 }
 
+struct Tick {
+  uint64_t fTick;
+};
+
 using BreakpointCallback = std::function<void(pid_t, struct user_regs_struct)>;
 
 struct Breakpoint {
@@ -236,7 +317,7 @@ namespace actor {
 
 // Actor::setPos(Vec3 const&)
 static void SetPos(pid_t pid, struct user_regs_struct regs) {
-  auto player = sPlayers.unsafeGetByAddress((void *)regs.rdi);
+  auto player = sLevel.fPlayers.unsafeGetByAddress((void *)regs.rdi);
   if (!player) {
     return;
   }
@@ -254,7 +335,7 @@ namespace player {
 // Player::move(Vec3 const&)
 static void Move(pid_t pid, struct user_regs_struct regs) {
   auto address = (void *)regs.rdi;
-  auto player = sPlayers.unsafeGetByAddress(address);
+  auto player = sLevel.fPlayers.unsafeGetByAddress(address);
   if (!player) {
     return;
   }
@@ -272,7 +353,7 @@ static void SetName(pid_t pid, struct user_regs_struct regs) {
   if (!name) {
     return;
   }
-  sPlayers.getByName(*name, address);
+  sLevel.fPlayers.getByName(*name, address);
 }
 
 } // namespace player
@@ -282,7 +363,7 @@ namespace server_player {
 // ServerPlayer::changeDimension(AutomaticID<Dimension, int>, bool)
 // ServerPlayer::changeDimensionWithCredits(AutomaticID<Dimension, int>)
 static void ChangeDimension(pid_t pid, struct user_regs_struct regs) {
-  auto player = sPlayers.unsafeGetByAddress((void *)regs.rdi);
+  auto player = sLevel.fPlayers.unsafeGetByAddress((void *)regs.rdi);
   if (!player) {
     return;
   }
@@ -292,7 +373,7 @@ static void ChangeDimension(pid_t pid, struct user_regs_struct regs) {
 
 // ServerPlayer::is2DPositionRelevant(AutomaticID<Dimension, int>, BlockPos const&)
 static void Is2DPositionRelevant(pid_t pid, struct user_regs_struct regs) {
-  auto player = sPlayers.unsafeGetByAddress((void *)regs.rdi);
+  auto player = sLevel.fPlayers.unsafeGetByAddress((void *)regs.rdi);
   if (!player) {
     return;
   }
@@ -302,17 +383,47 @@ static void Is2DPositionRelevant(pid_t pid, struct user_regs_struct regs) {
 
 // ServerPlayer::~ServerPlayer()
 static void Destruct(pid_t pid, struct user_regs_struct regs) {
-  auto player = sPlayers.unsafeGetByAddress((void *)regs.rdi);
+  auto player = sLevel.fPlayers.unsafeGetByAddress((void *)regs.rdi);
   if (!player) {
     return;
   }
-  sPlayers.forget(player);
+  sLevel.fPlayers.forget(player);
 }
 
 } // namespace server_player
 
+namespace level_event_coordinator {
+
+// LevelEventCoordinator::sendLevelWeatherChanged(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+static void SendLevelWeatherChanged(pid_t pid, struct user_regs_struct regs) {
+  auto dimension = ReadString(pid, (void *)regs.rsi);
+  bool rain = (bool)regs.rdx;
+  bool thunder = (bool)regs.rcx;
+  if (!dimension) {
+    return;
+  }
+  if (*dimension == "Overworld" || *dimension == "overworld") {
+    sLevel.fWeather.fRain = rain;
+    sLevel.fWeather.fThunder = thunder;
+  }
+}
+
+} // namespace level_event_coordinator
+
+namespace set_time_pakcet {
+
+// SetTimePacket::SetTimePacket(int)
+static void Construct(pid_t pid, struct user_regs_struct regs) {
+  int t = (int)regs.rsi;
+  sLevel.fTime = t;
+}
+
+} // namespace set_time_pakcet
+
 static void Debug(pid_t pid, struct user_regs_struct regs) {
-  printf("%s\n", __FUNCTION__);
+  // rdi rsi rdx rcx r8 r9
+  using namespace std;
+  cout << __FUNCTION__ << endl;
 }
 
 } // namespace breakpoint
@@ -330,8 +441,13 @@ int main(int argc, char *argv[]) {
       {.fAddress = 0x00000000016ac970, .fCallback = breakpoint::server_player::Is2DPositionRelevant},
       {.fAddress = 0x00000000016a46c0, .fCallback = breakpoint::server_player::Destruct},
       {.fAddress = 0x00000000016a4530, .fCallback = breakpoint::server_player::Destruct},
+      {.fAddress = 0x00000000022cb030, .fCallback = breakpoint::level_event_coordinator::SendLevelWeatherChanged},
+      {.fAddress = 0x00000000011e0b00, .fCallback = breakpoint::set_time_pakcet::Construct},
   };
   size_t const kNumBreakpoints = sizeof(breakpoints) / sizeof(Breakpoint);
+
+  std::string last = sLevel.report();
+  std::cout << Level::FormatReport(last) << std::endl;
 
   AttachAllThread(pid);
 
@@ -376,10 +492,11 @@ int main(int argc, char *argv[]) {
 
       target.fCallback(pid, regs);
 
-      // for debug
-      sPlayers.each([](Player const &player) {
-        printf("%s %s\n", player.fName.c_str(), player.location()->toString().c_str());
-      });
+      auto report = sLevel.report();
+      if (last != report) {
+        std::cout << Level::FormatReport(report) << std::endl;
+        last = report;
+      }
 
       ptrace(PTRACE_POKETEXT, tid, target.fAddress, target.fOriginalInstruction);
       regs.rip--;
