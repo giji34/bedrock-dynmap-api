@@ -1,13 +1,13 @@
-all: main
+all: tracer
 
 clean:
-	rm -f main
+	rm -f tracer
 
-main: main.cpp
-	g++ -std=c++17 main.cpp -o main
+tracer: src/tracer/main.cpp
+	g++ -std=c++17 src/tracer/main.cpp -o tracer
 
-run: main
-	./main $$(ps aux | grep bedrock_server | head -1 | awk '{print $$2}')
+run: tracer
+	./tracer $$(ps aux | grep bedrock_server | head -1 | awk '{print $$2}')
 
 fmt:
-	find . -name '*.cpp' | xargs -n 1 -P `nproc` clang-format -i
+	find src/tracer -name '*.cpp' | xargs -n 1 -P `nproc` clang-format -i
