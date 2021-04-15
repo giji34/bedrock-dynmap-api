@@ -14,6 +14,9 @@
 #include <memory>
 #include <optional>
 #include <sstream>
+#include <thread>
+
+#include <boost/asio.hpp>
 
 struct Vec3 {
   float fX;
@@ -414,6 +417,10 @@ static void Debug(pid_t pid, struct user_regs_struct regs) {
 
 } // namespace breakpoint
 
+static void Report(std::string s) {
+  std::cout << Level::FormatReport(s) << std::endl;
+}
+
 int main(int argc, char *argv[]) {
   pid_t pid = atoi(argv[1]);
 
@@ -433,7 +440,10 @@ int main(int argc, char *argv[]) {
   size_t const kNumBreakpoints = sizeof(breakpoints) / sizeof(Breakpoint);
 
   std::string last = sLevel.report();
-  std::cout << Level::FormatReport(last) << std::endl;
+  boost::asio::io_context ctx;
+  boost::asio::io_context::work work(ctx);
+  std::thread thread([&ctx]() { ctx.run(); });
+  ctx.post(std::bind(Report, last));
 
   AttachAllThread(pid);
 
@@ -456,11 +466,11 @@ int main(int argc, char *argv[]) {
     int tid = waitpid(-1, &status, __WALL);
 
     if (WIFEXITED(status)) {
-      exit(0);
+      break;
     }
 
     if (!WIFSTOPPED(status)) {
-      exit(1);
+      break;
     }
 
     int signum = WSTOPSIG(status);
@@ -468,29 +478,33 @@ int main(int argc, char *argv[]) {
       struct user_regs_struct regs;
       ptrace(PTRACE_GETREGS, tid, 0, &regs);
 
+      bool found = false;
       Breakpoint target;
       for (size_t i = 0; i < kNumBreakpoints; i++) {
         if (breakpoints[i].fAddress + 1 == regs.rip) {
           target = breakpoints[i];
+          found = true;
           break;
         }
       }
 
-      target.fCallback(pid, regs);
+      if (found) {
+        target.fCallback(pid, regs);
 
-      auto report = sLevel.report();
-      if (last != report) {
-        std::cout << Level::FormatReport(report) << std::endl;
-        last = report;
+        auto report = sLevel.report();
+        if (last != report) {
+          ctx.post(std::bind(Report, report));
+          last = report;
+        }
+
+        ptrace(PTRACE_POKETEXT, tid, target.fAddress, target.fOriginalInstruction);
+        regs.rip--;
+        ptrace(PTRACE_SETREGS, tid, 0, &regs);
+
+        ptrace(PTRACE_SINGLESTEP, tid, 0, 0);
+        waitpid(tid, &status, __WALL);
+        ptrace(PTRACE_POKETEXT, tid, target.fAddress, ((target.fOriginalInstruction & 0xFFFFFFFFFFFFFF00) | kInt3Opcode));
       }
-
-      ptrace(PTRACE_POKETEXT, tid, target.fAddress, target.fOriginalInstruction);
-      regs.rip--;
-      ptrace(PTRACE_SETREGS, tid, 0, &regs);
-
-      ptrace(PTRACE_SINGLESTEP, tid, 0, 0);
-      waitpid(tid, &status, __WALL);
-      ptrace(PTRACE_POKETEXT, tid, target.fAddress, ((target.fOriginalInstruction & 0xFFFFFFFFFFFFFF00) | kInt3Opcode));
 
       ptrace(PTRACE_CONT, tid, 0, 0);
     } else if (signum == 19 || signum == 21) {
@@ -499,4 +513,7 @@ int main(int argc, char *argv[]) {
       ptrace(PTRACE_CONT, tid, 0, signum);
     }
   }
+
+  ctx.stop();
+  thread.join();
 }
