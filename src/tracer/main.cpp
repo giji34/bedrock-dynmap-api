@@ -16,9 +16,9 @@
 #include <sstream>
 
 struct Vec3 {
-  float x;
-  float y;
-  float z;
+  float fX;
+  float fY;
+  float fZ;
 };
 
 enum class Dimension : int {
@@ -43,29 +43,26 @@ static std::string StringFromDimension(Dimension d) {
 struct Location {
   Dimension fDimension;
   Vec3 fPos;
-
-  std::string toString() const {
-    return "[" + std::to_string(fPos.x) + ", " + std::to_string(fPos.y) + ", " + std::to_string(fPos.z) + "]@" + StringFromDimension(fDimension);
-  }
 };
 
 class Player {
 public:
+  struct Data {
+    Data(Dimension d, Vec3 p, std::string const &n) : fDimension(d), fPos(p), fName(n) {}
+
+    Dimension fDimension;
+    Vec3 fPos;
+    std::string fName;
+  };
+
   explicit Player(void *address) : fAddress(address) {
   }
 
-  std::optional<Location> location() const {
-    if (!fPos || !fDimension) {
+  std::optional<Data> data() const {
+    if (!fPos || !fDimension || fName.empty()) {
       return std::nullopt;
     }
-    Location l;
-    l.fDimension = *fDimension;
-    l.fPos = *fPos;
-    return l;
-  }
-
-  std::optional<Vec3> pos() const {
-    return fPos;
+    return Data{*fDimension, *fPos, fName};
   }
 
   void setPos(Vec3 p) {
@@ -77,14 +74,10 @@ public:
       return std::nullopt;
     }
     Vec3 n = *fPos;
-    n.x += delta.x;
-    n.z += delta.z;
+    n.fX += delta.fX;
+    n.fZ += delta.fZ;
     fPos = n;
     return n;
-  }
-
-  std::optional<Dimension> dimension() const {
-    return fDimension;
   }
 
   void setDimension(int dimension) {
@@ -141,11 +134,11 @@ public:
     return p.get();
   }
 
-  void each(std::function<void(Player const &player)> callback) {
+  void each(std::function<void(Player::Data const &data)> callback) const {
     for (auto it : fPlayers) {
-      Player const *player = it.second.get();
-      if (player->location() && !player->fName.empty()) {
-        callback(*player);
+      auto data = it.second->data();
+      if (data) {
+        callback(*data);
       }
     }
   }
@@ -160,27 +153,24 @@ public:
   void report(std::ostream &s) const {
     s << "currentcount:" << fPlayers.size() << ",";
     s << "players:[";
-    std::vector<std::shared_ptr<Player>> players;
-    for (auto const &it : fPlayers) {
-      if (it.second->location()) {
-        players.push_back(it.second);
-      }
-    }
+    std::vector<Player::Data> players;
+    each([&players](auto const &p) {
+      players.push_back(p);
+    });
     for (int i = 0; i < players.size(); i++) {
       auto const &player = players[i];
-      auto location = player->location();
       s << "{";
-      auto name = player->fName; //TODO: escape?
+      auto name = player.fName; //TODO: escape?
       s << "account:\"" << name << "\",";
       s << "name:\"" << name << "\",";
       s << "armor:0,";
       s << "health:20,";
       s << "sort:" << i << ",";
       s << "type:\"player\",";
-      s << "world:\"" << StringFromDimension(location->fDimension) << "\",";
-      s << "x:" << (int)location->fPos.x << ",";
-      s << "y:" << (int)location->fPos.y << ",";
-      s << "z:" << (int)location->fPos.z;
+      s << "world:\"" << StringFromDimension(player.fDimension) << "\",";
+      s << "x:" << (int)player.fPos.fX << ",";
+      s << "y:" << (int)player.fPos.fY << ",";
+      s << "z:" << (int)player.fPos.fZ;
       s << "}";
       if (i < players.size() - 1) {
         s << ",";
@@ -236,7 +226,7 @@ struct Level {
   }
 };
 
-Level sLevel;
+static Level sLevel;
 
 void AttachAllThread(int pid) {
   char _taskdir[255];
@@ -298,10 +288,6 @@ static std::optional<std::string> ReadString(pid_t pid, void *address) {
   }
   return std::string(data.data());
 }
-
-struct Tick {
-  uint64_t fTick;
-};
 
 using BreakpointCallback = std::function<void(pid_t, struct user_regs_struct)>;
 
