@@ -1,10 +1,11 @@
-import type { Request, Response } from "express";
+import type { Request, Response, Errback } from "express";
 import * as express from "express";
 import * as child_process from "child_process";
 import * as path from "path";
 import helmet = require("helmet");
 import * as process from "process";
 import * as caporal from "caporal";
+import * as fetch from "node-fetch";
 
 async function startGameServer(exe: string): Promise<number> {
   return new Promise((resolve) => {
@@ -53,7 +54,35 @@ async function startTracer(pid: number): Promise<void> {
   });
 }
 
-async function startWebServer(port: number): Promise<void> {
+type Player = {
+  world: string;
+  armor: number;
+  name: string;
+  x: number;
+  y: number;
+  health: number;
+  z: number;
+  sort: number;
+  type: string;
+  account: string;
+};
+
+type Report = {
+  currentcount: number;
+  hasStorm: boolean;
+  players: Player[];
+  isThundering: boolean;
+  confighash: number;
+  servertime: number;
+  updates: any[];
+  timestamp: number;
+};
+
+async function startWebServer(params: {
+  port: number;
+  base: string;
+}): Promise<void> {
+  const { port, base } = params;
   return new Promise((resolve) => {
     const app = express();
     app.use(helmet());
@@ -64,14 +93,57 @@ async function startWebServer(port: number): Promise<void> {
         },
       })
     );
-    app.get("*", (req: Request, res: Response) => {
+    app.get("*", (req: Request, res: Response, next: Errback) => {
       if (report === "") {
         res.status(404);
         res.send("");
-      } else {
-        res.status(200);
-        res.send(report);
+        return;
       }
+      let p = req.path;
+      while (p.startsWith("/")) {
+        p = p.substr(1);
+      }
+      const elements = p.split("/");
+      if (elements.length !== 2) {
+        res.status(400);
+        res.send("");
+        return;
+      }
+      const world = elements[0];
+      const timestamp = elements[1];
+      if (
+        world !== "world" &&
+        world !== "world_nether" &&
+        world !== "world_the_end"
+      ) {
+        res.status(400);
+        res.send("");
+        return;
+      }
+      if (isNaN(parseInt(timestamp, 10))) {
+        res.status(400);
+        res.send("");
+        return;
+      }
+      let r: Report;
+      try {
+        r = JSON.parse(report) as Report;
+      } catch (e) {
+        next(e);
+        return;
+      }
+      fetch(`${base}/up/world/${world}/${timestamp}`)
+        .then((res) => res.json() as Report)
+        .then((o) => {
+          const n: Report = {
+            ...r,
+            updates: o.updates,
+            confighash: o.confighash,
+          };
+          res.status(200);
+          res.json(n);
+        })
+        .catch(next);
     });
     app.listen(port, () => {
       console.log(`[web] started at port ${port}`);
@@ -84,12 +156,14 @@ caporal
   .command("run", "start server")
   .option("--exe <exe>", "bedrock server executable", caporal.STRING)
   .option("--port <port>", "port number of web server", caporal.INT, 3000)
+  .option("--base <url>", "url of actual dynmap server", caporal.STRING)
   .action(async (args, opts) => {
     const port = opts.port;
+    const base = opts.base;
     const exe = opts.exe;
     const pid = await startGameServer(path.resolve(exe));
     await startTracer(pid);
-    await startWebServer(port);
+    await startWebServer({ port, base });
   });
 
 caporal.parse(process.argv);
