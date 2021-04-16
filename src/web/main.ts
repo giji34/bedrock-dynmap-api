@@ -39,7 +39,11 @@ async function startTracer(pid: number): Promise<void> {
     stdio: "pipe",
   });
   tracer.stdout.on("data", (chunk: Buffer) => {
-    const lines = chunk.toString("utf-8").split("\n");
+    const lines = chunk
+      .toString("utf-8")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l !== "");
     if (lines.length > 0) {
       report = lines[lines.length - 1];
     }
