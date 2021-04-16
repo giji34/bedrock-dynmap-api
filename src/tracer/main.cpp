@@ -154,8 +154,8 @@ public:
   }
 
   void report(std::ostream &s) const {
-    s << "currentcount:" << fPlayers.size() << ",";
-    s << "players:[";
+    s << "\"currentcount\":" << fPlayers.size() << ",";
+    s << "\"players\":[";
     std::vector<Player::Data> players;
     each([&players](auto const &p) {
       players.push_back(p);
@@ -164,16 +164,16 @@ public:
       auto const &player = players[i];
       s << "{";
       auto name = player.fName; //TODO: escape?
-      s << "account:\"" << name << "\",";
-      s << "name:\"" << name << "\",";
-      s << "armor:0,";
-      s << "health:20,";
-      s << "sort:" << i << ",";
-      s << "type:\"player\",";
-      s << "world:\"" << StringFromDimension(player.fDimension) << "\",";
-      s << "x:" << (int)player.fPos.fX << ",";
-      s << "y:" << (int)player.fPos.fY << ",";
-      s << "z:" << (int)player.fPos.fZ;
+      s << "\"account\":\"" << name << "\",";
+      s << "\"name\":\"" << name << "\",";
+      s << "\"armor\":0,";
+      s << "\"health\":20,";
+      s << "\"sort\":" << i << ",";
+      s << "\"type\":\"player\",";
+      s << "\"world\":\"" << StringFromDimension(player.fDimension) << "\",";
+      s << "\"x\":" << (int)player.fPos.fX << ",";
+      s << "\"y\":" << (int)player.fPos.fY << ",";
+      s << "\"z\":" << (int)player.fPos.fZ;
       s << "}";
       if (i < players.size() - 1) {
         s << ",";
@@ -193,8 +193,8 @@ struct Weather {
   bool fThunder;
 
   void report(std::ostream &s) const {
-    s << "hasStorm:" << (fRain ? "true" : "false") << ",";
-    s << "isThundering:" << (fThunder ? "true" : "false") << ",";
+    s << "\"hasStorm\":" << (fRain ? "true" : "false") << ",";
+    s << "\"isThundering\":" << (fThunder ? "true" : "false") << ",";
   }
 };
 
@@ -213,9 +213,9 @@ struct Level {
     std::ostringstream s;
     fPlayers.report(s);
     fWeather.report(s);
-    s << "configHash:0,";
-    s << "servertime:" << (fTime % 24000) << ",";
-    s << "updates:[]";
+    s << "\"confighash\":0,";
+    s << "\"servertime\":" << (fTime % 24000) << ",";
+    s << "\"updates\":[]";
     return s.str();
   }
 
@@ -223,7 +223,7 @@ struct Level {
     std::ostringstream s;
     s << "{";
     s << partial << ",";
-    s << "timestamp:" << UnixTimestampMilli();
+    s << "\"timestamp\":" << UnixTimestampMilli();
     s << "}";
     return s.str();
   }
