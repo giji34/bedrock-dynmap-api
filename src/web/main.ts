@@ -64,7 +64,7 @@ async function startWebServer(port: number): Promise<void> {
         },
       })
     );
-    app.get("/up/*", (req: Request, res: Response) => {
+    app.get("*", (req: Request, res: Response) => {
       if (report === "") {
         res.status(404);
         res.send("");
