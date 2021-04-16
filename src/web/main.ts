@@ -35,8 +35,8 @@ let report: string = "";
 
 async function startTracer(pid: number): Promise<void> {
   const exe = path.join(__dirname, "/../tracer/tracer");
-  const tracer = child_process.spawn(exe, [`${pid}`], {
-    stdio: ["inherit", "pipe", "inherit"],
+  const tracer = child_process.spawn("sudo", [exe, `${pid}`], {
+    stdio: "pipe",
   });
   tracer.stdout.on("data", (chunk: Buffer) => {
     const lines = chunk.toString("utf-8").split("\n");
