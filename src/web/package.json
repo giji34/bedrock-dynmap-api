@@ -1,7 +1,7 @@
 {
   "scripts": {
     "fmt": "prettier --write '*.ts'",
-    "dev": "ts-node main.ts run --port 3000 --exe ../../1.16.220.02/bedrock_server"
+    "dev": "ts-node main.ts run --port 3000 --exe ../../1.16.221.01/bedrock_server"
   },
   "dependencies": {
     "caporal": "^1.4.0",
