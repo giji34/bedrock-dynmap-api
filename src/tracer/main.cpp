@@ -415,27 +415,27 @@ static void Report(std::string s) {
 int main(int argc, char *argv[]) {
   pid_t pid = atoi(argv[1]);
 
-  // 1.16.221.01
+  // 1.17.41.01
   Breakpoint breakpoints[] = {
       // Actor::setPos(Vec3 const&)
-      {.fAddress = 0x0000000001f9fdf0, .fCallback = breakpoint::actor::SetPos},
+      {.fAddress = 0x0000000002041290, .fCallback = breakpoint::actor::SetPos},
       // Player::move(Vec3 const&)
-      {.fAddress = 0x0000000001b174d0, .fCallback = breakpoint::player::Move},
+      {.fAddress = 0x000000000273b470, .fCallback = breakpoint::player::Move},
       // Player::setName(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)
-      {.fAddress = 0x0000000001b14490, .fCallback = breakpoint::player::SetName},
+      {.fAddress = 0x0000000002736c80, .fCallback = breakpoint::player::SetName},
       // ServerPlayer::changeDimension(AutomaticID<Dimension, int>, bool)
-      {.fAddress = 0x00000000016ac190, .fCallback = breakpoint::server_player::ChangeDimension},
+      {.fAddress = 0x0000000001bd2a20, .fCallback = breakpoint::server_player::ChangeDimension},
       // ServerPlayer::changeDimensionWithCredits(AutomaticID<Dimension, int>)
-      {.fAddress = 0x00000000016ac2a0, .fCallback = breakpoint::server_player::ChangeDimension},
+      {.fAddress = 0x0000000001bd2b30, .fCallback = breakpoint::server_player::ChangeDimension},
       // ServerPlayer::is2DPositionRelevant(AutomaticID<Dimension, int>, BlockPos const&)
-      {.fAddress = 0x00000000016ac980, .fCallback = breakpoint::server_player::Is2DPositionRelevant},
+      {.fAddress = 0x0000000001bd3450, .fCallback = breakpoint::server_player::Is2DPositionRelevant},
       // ServerPlayer::~ServerPlayer()
-      {.fAddress = 0x00000000016a46d0, .fCallback = breakpoint::server_player::Destruct},
-      {.fAddress = 0x00000000016a4540, .fCallback = breakpoint::server_player::Destruct},
+      {.fAddress = 0x0000000001bcc580, .fCallback = breakpoint::server_player::Destruct},
+      {.fAddress = 0x0000000001bcc350, .fCallback = breakpoint::server_player::Destruct},
       // LevelEventCoordinator::sendLevelWeatherChanged(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
-      {.fAddress = 0x00000000022cb250, .fCallback = breakpoint::level_event_coordinator::SendLevelWeatherChanged},
+      {.fAddress = 0x000000000239af30, .fCallback = breakpoint::level_event_coordinator::SendLevelWeatherChanged},
       // SetTimePacket::SetTimePacket(int)
-      {.fAddress = 0x00000000011e0b00, .fCallback = breakpoint::set_time_pakcet::Construct},
+      {.fAddress = 0x0000000001d59450, .fCallback = breakpoint::set_time_pakcet::Construct},
   };
   size_t const kNumBreakpoints = sizeof(breakpoints) / sizeof(Breakpoint);
 
